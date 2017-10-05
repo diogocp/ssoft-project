@@ -1,0 +1,13 @@
+apply plugin: 'antlr'
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    antlr "org.antlr:antlr4:4.7"
+}
+
+generateGrammarSource {
+    arguments += ["-Dlanguage=Python3", "-visitor"]
+}
