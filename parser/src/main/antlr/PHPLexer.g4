@@ -45,7 +45,7 @@ _phpScript = False
 _insideString = False
 
 def nextToken(self):
-    token = super(PHPLexer_Python, self).nextToken()
+    token = super(PHPLexer, self).nextToken()
 
     if token.type == self.PHPEnd or token.type == self.PHPEndSingleLineComment:
         if self._mode == self.SingleLineCommentMode:
@@ -64,7 +64,7 @@ def nextToken(self):
                 self._prevTokenType == self.Colon or \
                 self._prevTokenType == self.OpenCurlyBracket or \
                 self._prevTokenType == self.CloseCurlyBracket:
-                token = super(PHPLexer_Python, self).nextToken()
+                token = super(PHPLexer, self).nextToken()
             else:
                 token = CommonToken(type=self.SemiColon)
                 token.text = ';'
@@ -84,7 +84,7 @@ def nextToken(self):
                     token = CommonToken(type=self.SemiColon)
                     token.text = ';'
                 else:
-                    token = super(PHPLexer_Python, self).nextToken()
+                    token = super(PHPLexer, self).nextToken()
     elif self._mode == self.PHP:
         if self._channel == self.HIDDEN:
             self._prevTokenType = token.type
