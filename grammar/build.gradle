@@ -5,9 +5,13 @@ repositories {
 }
 
 dependencies {
-    antlr "org.antlr:antlr4:4.7"
+    antlr group: 'org.antlr', name: 'antlr4', version: '4.7'
 }
 
 generateGrammarSource {
-    arguments += ["-Dlanguage=Python3", "-visitor"]
+    arguments += ['-Dlanguage=Python3', '-visitor']
+    outputDirectory = new File("${projectDir}/../parser/")
+    doLast {
+        new File("${outputDirectory}/__init__.py").createNewFile()
+    }
 }
