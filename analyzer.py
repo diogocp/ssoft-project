@@ -160,19 +160,27 @@ def weird_json_ast_to_graph(ast):
                        if node.kind == NodeKind.FUNCTION)
     return graph
 
-def parse_patterns(f):
-    blocks = []
-    for line in f:
-        line = line.strip()
-        if line == "" and blocks != [] and blocks[-1] != []:
-            blocks.append([])
-        elif blocks != []:
-            blocks[-1].append(line)
-        else:
-            blocks = [[line]]
+def read_patterns(filename):
+    lines = None
+    with open(filename, 'r') as f:
+        lines = f.readlines()
 
-    # TODO: actually parse this
-    return blocks
+    lines = map(str.strip, lines)
+    lines = filter(len, lines)
+
+    patterns = []
+    try:
+        while True:
+            patterns.append({
+                'name': next(lines),
+                'sources': next(lines).split(','),
+                'sinks': next(lines).split(','),
+                'downgraders': next(lines).split(',')
+            })
+    except StopIteration:
+        pass
+
+    return patterns
 
 def main(argv):
     input_file = argv[1]
@@ -182,8 +190,7 @@ def main(argv):
     graph = weird_json_ast_to_graph(raw_ast)
     graph.to_dot(sys.stdout)
 
-    with open('patterns.txt', 'r') as f:
-        patterns = parse_patterns(f)
+    patterns = read_patterns("patterns.txt")
 
 
 if __name__ == '__main__':
