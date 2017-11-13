@@ -93,6 +93,10 @@ def parse_call(s):
     if what['kind'] != "identifier":
         raise NotImplementedError
 
+    if what['name'] in pattern['downgraders']:
+        # Downgraders make everything safe
+        return False
+
     if what['name'] not in pattern['sinks']:
         # Not a sensitive sink; continue but assume that the return value is unsafe
         return True
