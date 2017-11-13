@@ -7,14 +7,7 @@ npm install
 npm run parser -- path/to/php/code >where/you/want/to/save/it
 ```
 
-There's a script that converts text files in `proj-slices/` to JSON.
-
 Then run `analyzer.py` in the project root directory. Example:
 ```sh
-./analyzer.py proj-slices/xss_01.json
-```
-
-Currently it only spits out a GraphViz file, for visualization.
-```sh
-./analyzer.py proj-slices/xss_01.json | dot -Tpng -o xss_01.png
+./analyzer.py slices/sqli_01.json
 ```
