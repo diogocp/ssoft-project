@@ -54,6 +54,7 @@ def parse(s):
         'program': parse_program,
         'variable': lambda x: definitions.get(x['name']),
         'offsetlookup': lambda x: parse(x['what']),
+        'encapsed': lambda x: any(map(parse, x['value'])),
         'string': lambda x: False,
         'number': lambda x: False,
         'boolean': lambda x: False
@@ -84,7 +85,7 @@ def parse_assign(s):
 
 
 def parse_call(s):
-    if sum([parse(arg) for arg in s['arguments']]) == 0:
+    if not any(parse(arg) for arg in s['arguments']):
         # All arguments safe; assume functions don't make them dangerous
         # TODO: we could check if the function is a sensitive _source_
         return False
