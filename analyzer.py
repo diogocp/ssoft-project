@@ -15,7 +15,10 @@ def main(argv):
         with open(argv[1]) as f:
             ast = json.load(f)
     else:
-        ast = json.load(sys.stdin)
+        try:
+            ast = json.load(sys.stdin)
+        except KeyboardInterrupt:
+            return 130
 
     patterns = read_patterns("patterns.txt")
 
@@ -33,6 +36,8 @@ def main(argv):
         except AssertionError as e:
             vulnerabilities += 1
             print("%s: %s." % (p['name'], str(e)), file=sys.stderr)
+        except KeyboardInterrupt:
+            return 130
 
     if vulnerabilities == 0:
         print("No vulnerabilities found.", file=sys.stderr)
