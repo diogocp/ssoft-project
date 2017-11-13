@@ -1,197 +1,126 @@
 #!/usr/bin/env python3
 
-from enum import Enum
 import sys
 import json
 
-NodeKind = Enum("NodeKind", 'LITERAL VARIABLE FUNCTION OPERATOR',
-                module=__name__)
+pattern = {}
+definitions = {}
 
 
-class Node:
-    def __init__(self, label='', kind=NodeKind.VARIABLE):
-        if "_last_id" not in Node.__dict__:
-            Node._last_id = 0
-        else:
-            Node._last_id += 1
+def main(argv):
+    if len(argv) > 2:
+        print("Usage:", argv[0], "[FILENAME]", file=sys.stderr)
+        return 2
+    if len(argv) == 2:
+        with open(argv[1]) as f:
+            ast = json.load(f)
+    else:
+        ast = json.load(sys.stdin)
 
-        self._id = Node._last_id
-        self.kind = kind
-        self.label = label
-        self._inputs = []
-        self._outputs = []
-        self._graph = None
+    patterns = read_patterns("patterns.txt")
 
-    def __str__(self):
-        # TODO: add more information?
-        return '<Node#{}: {}>'.format(self._id, self.label)
+    vulnerabilities = 0
+    global pattern
+    for p in patterns:
+        pattern = p
+        definitions.clear()
 
-    def add_input(self, node):
-        self._inputs.append(node)
-        node._outputs.append(self)
+        for src in p['sources']:
+            definitions[src] = True
 
-    def add_output(self, node):
-        self._outputs.append(node)
-        node._inputs.append(self)
+        try:
+            parse(ast)
+        except AssertionError as e:
+            vulnerabilities += 1
+            print("%s: %s." % (p['name'], str(e)), file=sys.stderr)
 
-    def to_dot(self, f):
-        print('  {} [label={}];'.format(self._id, json.dumps(self.label)),
-              file=f)
-        for input in self._inputs:
-            print("  {} -> {};".format(input._id, self._id), file=f)
-
-
-class DependencyGraph:
-    def __init__(self):
-        self.nodes = set()
-        self.tainted_nodes = set()
-        self.vulnerable_nodes = set()
-        self.variables = set()
-        self.functions = set()
-
-    def add_node(self, node):
-        node._graph = self
-        self.nodes.add(node)
-
-    def to_dot(self, f):
-        print('digraph {', file=f)
-        for node in self.nodes:
-            node.to_dot(f)
-        print('}', file=f)
+    if vulnerabilities == 0:
+        print("No vulnerabilities found.", file=sys.stderr)
+        return 0
+    else:
+        return 1
 
 
-def call_debugger():
-    import pdb
-    pdb.set_trace()
+def parse(s):
+    kinds = {
+        'assign': parse_assign,
+        'bin': lambda x: parse(x['left']) or parse(x['right']),
+        'call': parse_call,
+        'program': parse_program,
+        'variable': lambda x: definitions.get(x['name']),
+        'offsetlookup': lambda x: parse(x['what']),
+        'string': lambda x: False,
+        'number': lambda x: False,
+        'boolean': lambda x: False
+    }
+    return kinds[s['kind']](s)
 
 
-def weird_json_ast_to_graph(ast):
-    live_variables = {}
-    graph = DependencyGraph()
+def parse_program(s):
+    for child in s['children']:
+        parse(child)
 
-    def walk_ast(node):
-        if node['kind'] == "program":
-            for child in node['children']:
-                walk_ast(child)
-            return
 
-        if node['kind'] == "variable":
-            name = '$' + node['name']
-            var = live_variables.get(name, None)
-            if var:
-                return var
-            var = Node(label=name)
-            live_variables[name] = var
-            graph.add_node(var)
-            return var
+def parse_assign(s):
+    left = s['left']
+    right = s['right']
 
-        if node['kind'] == "assign":
-            # We need to process the right part first. e.g.:
-            #     $a = $a + 1
-            # The $a on the right refers to an old node
-            left = walk_ast(node['left'])
-            right = walk_ast(node['right'])
-            assign_node = Node(label='op=', kind=NodeKind.OPERATOR)
-            assign_node.add_input(left)
-            assign_node.add_input(right)
-            graph.add_node(assign_node)
+    # TODO: see what else could be here and how to handle it
+    # += -= *= /= %= .= &= |= ^= <<= >>=
+    if s['operator'] != "=":
+        raise NotImplementedError
 
-            out_node = Node(label=left.label)
-            out_node.add_input(assign_node)
-            graph.add_node(out_node)
+    # TODO: handle assignments to arrays (e.g. _GET['x'] = 42)
+    if left['kind'] != "variable":
+        raise NotImplementedError
+    name = left['name']
 
-            # FIXME: this doesn't handle e.g. _GET['batata'] = 3;
-            if left.kind == NodeKind.VARIABLE:
-                live_variables[left.label] = out_node
-            else:
-                call_debugger()
+    definitions[name] = parse(right)
 
-            return out_node
 
-        if node['kind'] == 'offsetlookup':
-            left = walk_ast(node['what'])
-            right = walk_ast(node['offset'])
-            out_node = Node(label='op[]', kind=NodeKind.OPERATOR)
-            out_node.add_input(left)
-            out_node.add_input(right)
-            graph.add_node(out_node)
-            return out_node
+def parse_call(s):
+    if sum([parse(arg) for arg in s['arguments']]) == 0:
+        # All arguments safe; assume functions don't make them dangerous
+        # TODO: we could check if the function is a sensitive _source_
+        return False
 
-        if node['kind'] == "bin":
-            left = walk_ast(node['left'])
-            right = walk_ast(node['right'])
-            op = 'op{}'.format(node['type'])
-            out_node = Node(label=op, kind=NodeKind.OPERATOR)
-            out_node.add_input(left)
-            out_node.add_input(right)
-            graph.add_node(out_node)
-            return out_node
+    what = s['what']
+    if what['kind'] != "identifier":
+        raise NotImplementedError
 
-        if node['kind'] == 'encapsed':
-            inputs = map(walk_ast, node['value'])
-            out_node = Node(label='op"$"', kind=NodeKind.OPERATOR)
-            for input in inputs:
-                out_node.add_input(input)
-            graph.add_node(out_node)
-            return out_node
+    if what['name'] not in pattern['sinks']:
+        # Not a sensitive sink; continue but assume that the return value is unsafe
+        return True
 
-        if node['kind'] == 'string':
-            label = repr(node['value'])
-            out_node = Node(label=label, kind=NodeKind.LITERAL)
-            graph.add_node(out_node)
-            return out_node
+    # If we reach this point, we have an dangerous argument going into a sensitive sink
+    raise AssertionError("found '%s' call with unsafe arguments" % what['name'])
 
-        if node['kind'] == "call":
-            inputs = map(walk_ast, node['arguments'])
-            op = '{}()'.format(node['what']['name'])
-            out_node = Node(label=op, kind=NodeKind.FUNCTION)
-            for input in inputs:
-                out_node.add_input(input)
-            graph.add_node(out_node)
-            return out_node
-
-        # TODO: add missing AST types
-        call_debugger()
-
-    walk_ast(ast)
-    graph.variables = (node for node in graph.nodes
-                       if node.kind == NodeKind.VARIABLE)
-    graph.functions = (node for node in graph.nodes
-                       if node.kind == NodeKind.FUNCTION)
-    return graph
 
 def read_patterns(filename):
-    lines = None
-    with open(filename, 'r') as f:
+    with open(filename) as f:
         lines = f.readlines()
 
+    # Ignore empty lines
     lines = map(str.strip, lines)
     lines = filter(len, lines)
 
     patterns = []
     try:
         while True:
-            patterns.append({
-                'name': next(lines),
-                'sources': next(lines).split(','),
-                'sinks': next(lines).split(','),
-                'downgraders': next(lines).split(',')
-            })
+            name = next(lines)
+            sources = next(lines).split(',')
+            downgraders = next(lines).split(',')
+            sinks = next(lines).split(',')
+
+            # Remove $ from the beginning of variable names
+            sources = [s[1:] if s.startswith("$") else s for s in sources]
+
+            patterns.append({'name': name, 'sources': sources, 'downgraders': downgraders, 'sinks': sinks})
     except StopIteration:
         pass
 
     return patterns
 
-def main(argv):
-    input_file = argv[1]
-    with open(input_file, 'r') as f:
-        raw_ast = json.load(f)
-
-    graph = weird_json_ast_to_graph(raw_ast)
-    graph.to_dot(sys.stdout)
-
-    patterns = read_patterns("patterns.txt")
-
 
 if __name__ == '__main__':
-    main(sys.argv)
+    sys.exit(main(sys.argv))
