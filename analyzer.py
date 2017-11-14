@@ -2,17 +2,24 @@
 
 import sys
 import json
+import warnings
 
+
+filename = ""
 pattern = {}
 definitions = {}
 
 
 def main(argv):
+    global filename
+    global pattern
+
     if len(argv) > 2:
         print("Usage:", argv[0], "[FILENAME]", file=sys.stderr)
         return 2
     if len(argv) == 2:
         with open(argv[1]) as f:
+            filename = "[" + argv[1] + "] "
             ast = json.load(f)
     else:
         try:
@@ -23,7 +30,6 @@ def main(argv):
     patterns = read_patterns("patterns.txt")
 
     vulnerabilities = 0
-    global pattern
     for p in patterns:
         pattern = p
         definitions.clear()
@@ -35,19 +41,19 @@ def main(argv):
             parse(ast)
         except AssertionError as e:
             vulnerabilities += 1
-            print("%s: %s." % (p['name'], str(e)), file=sys.stderr)
+            print("%s%s: %s." % (filename, p['name'], str(e)), file=sys.stderr)
         except KeyboardInterrupt:
             return 130
 
     if vulnerabilities == 0:
-        print("No vulnerabilities found.", file=sys.stderr)
+        print("%sNo vulnerabilities found." % filename, file=sys.stderr)
         return 0
     else:
         return 1
 
 
 def parse(s):
-    kinds = {
+    handlers = {
         'assign': parse_assign,
         'bin': lambda x: parse(x['left']) or parse(x['right']),
         'call': parse_call,
@@ -62,7 +68,12 @@ def parse(s):
         'number': lambda x: False,
         'boolean': lambda x: False
     }
-    return kinds[s['kind']](s)
+    try:
+        handler = handlers[s['kind']]
+    except KeyError:
+        warnings.warn("no handler for nodes of kind '%s'" % s['kind'])
+        return False
+    return handler(s)
 
 
 def parse_program(s):
@@ -155,6 +166,11 @@ def read_patterns(filename):
         pass
 
     return patterns
+
+
+def showwarning(message, *unused, file=sys.stderr):
+    print("%sWarning:" % filename, message, file=file)
+warnings.showwarning = showwarning
 
 
 if __name__ == '__main__':
