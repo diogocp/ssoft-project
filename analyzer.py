@@ -51,6 +51,9 @@ def parse(s):
         'assign': parse_assign,
         'bin': lambda x: parse(x['left']) or parse(x['right']),
         'call': parse_call,
+        'echo': parse_construct,
+        'print': parse_construct,
+        'exit': parse_construct,  # die also gets parsed as exit
         'program': parse_program,
         'variable': lambda x: definitions.get(x['name']),
         'offsetlookup': lambda x: parse(x['what']),
@@ -104,6 +107,28 @@ def parse_call(s):
 
     # If we reach this point, we have an dangerous argument going into a sensitive sink
     raise AssertionError("found '%s' call with unsafe arguments" % what['name'])
+
+
+def parse_construct(s):
+    if s['kind'] not in pattern['sinks']:
+        return False
+
+    # arguments may be either an array (when the construct accepts more than one),
+    # or an object, when the construct takes a single argument. In the case of exit,
+    # the arguments are in an object named status...
+    if s['kind'] == "echo":
+        arguments = s['arguments']
+    elif s['kind'] == "print":
+        arguments = [s['arguments']]
+    elif s['kind'] == "exit":
+        arguments = [s['status']]
+    else:
+        raise NotImplementedError("language construct '%s' not implemented" % s['kind'])
+
+    if any(parse(arg) for arg in arguments):
+        raise AssertionError("found '%s' with unsafe arguments" % s['kind'])
+
+    return False
 
 
 def read_patterns(filename):
