@@ -4,10 +4,10 @@ You can convert PHP into a JSON AST by doing
 ```sh
 cd slice-to-ast/
 npm install
-npm run parser -- path/to/php/code >where/you/want/to/save/it
+npm run parser -- ../slices/slice1.php > ../slices/slice1.json
 ```
 
 Then run `analyzer.py` in the project root directory. Example:
 ```sh
-./analyzer.py slices/sqli_01.json
+./analyzer.py slices/slice1.json
 ```

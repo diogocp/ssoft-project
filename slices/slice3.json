@@ -6,7 +6,7 @@
       "operator": "=",
       "left": {
         "kind": "variable",
-        "name": "nis",
+        "name": "idkelas",
         "byref": false,
         "curly": false
       },
@@ -14,13 +14,13 @@
         "kind": "offsetlookup",
         "what": {
           "kind": "variable",
-          "name": "_POST",
+          "name": "_GET",
           "byref": false,
           "curly": false
         },
         "offset": {
           "kind": "string",
-          "value": "nis",
+          "value": "idk",
           "isDoubleQuote": false
         }
       }
@@ -30,7 +30,7 @@
       "operator": "=",
       "left": {
         "kind": "variable",
-        "name": "q_sems",
+        "name": "show_kelas",
         "byref": false,
         "curly": false
       },
@@ -39,18 +39,18 @@
         "value": [
           {
             "kind": "string",
-            "value": "SELECT id_nilai,nis,semester FROM nilai WHERE nis='",
+            "value": "SELECT * FROM kelas WHERE id_kelas='",
             "isDoubleQuote": false
           },
           {
             "kind": "variable",
-            "name": "nis",
+            "name": "idkelas",
             "byref": false,
             "curly": false
           },
           {
             "kind": "string",
-            "value": "'GROUP BY semester",
+            "value": "'",
             "isDoubleQuote": false
           }
         ],
@@ -62,7 +62,7 @@
       "operator": "=",
       "left": {
         "kind": "variable",
-        "name": "hasil",
+        "name": "hasil_kelas",
         "byref": false,
         "curly": false
       },
@@ -76,7 +76,7 @@
         "arguments": [
           {
             "kind": "variable",
-            "name": "q_sems",
+            "name": "show_kelas",
             "byref": false,
             "curly": false
           },

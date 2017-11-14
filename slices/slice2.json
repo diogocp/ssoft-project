@@ -6,7 +6,7 @@
       "operator": "=",
       "left": {
         "kind": "variable",
-        "name": "id_nilai",
+        "name": "nis",
         "byref": false,
         "curly": false
       },
@@ -14,13 +14,13 @@
         "kind": "offsetlookup",
         "what": {
           "kind": "variable",
-          "name": "_GET",
+          "name": "_POST",
           "byref": false,
           "curly": false
         },
         "offset": {
           "kind": "string",
-          "value": "idn",
+          "value": "nis",
           "isDoubleQuote": false
         }
       }
@@ -30,7 +30,7 @@
       "operator": "=",
       "left": {
         "kind": "variable",
-        "name": "q_nilai",
+        "name": "q_sems",
         "byref": false,
         "curly": false
       },
@@ -39,18 +39,18 @@
         "value": [
           {
             "kind": "string",
-            "value": "SELECT * FROM nilai INNER JOIN matapelajaran ON \nmatapelajaran.id_matapelajaran = nilai.id_matapelajaran INNER JOIN siswa ON siswa.nis=nilai.nis \nINNER JOIN kelas ON kelas.id_kelas=nilai.id_kelas\nWHERE id_nilai='",
+            "value": "SELECT id_nilai,nis,semester FROM nilai WHERE nis='",
             "isDoubleQuote": false
           },
           {
             "kind": "variable",
-            "name": "id_nilai",
+            "name": "nis",
             "byref": false,
             "curly": false
           },
           {
             "kind": "string",
-            "value": "'",
+            "value": "'GROUP BY semester",
             "isDoubleQuote": false
           }
         ],
@@ -76,7 +76,7 @@
         "arguments": [
           {
             "kind": "variable",
-            "name": "q_nilai",
+            "name": "q_sems",
             "byref": false,
             "curly": false
           },

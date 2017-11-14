@@ -6,7 +6,7 @@
       "operator": "=",
       "left": {
         "kind": "variable",
-        "name": "idkelas",
+        "name": "nis",
         "byref": false,
         "curly": false
       },
@@ -14,13 +14,13 @@
         "kind": "offsetlookup",
         "what": {
           "kind": "variable",
-          "name": "_GET",
+          "name": "_POST",
           "byref": false,
           "curly": false
         },
         "offset": {
           "kind": "string",
-          "value": "idk",
+          "value": "nis",
           "isDoubleQuote": false
         }
       }
@@ -30,7 +30,7 @@
       "operator": "=",
       "left": {
         "kind": "variable",
-        "name": "show_kelas",
+        "name": "query",
         "byref": false,
         "curly": false
       },
@@ -39,12 +39,12 @@
         "value": [
           {
             "kind": "string",
-            "value": "SELECT * FROM kelas WHERE id_kelas='",
+            "value": "SELECT *FROM siswa WHERE nis='",
             "isDoubleQuote": false
           },
           {
             "kind": "variable",
-            "name": "idkelas",
+            "name": "nis",
             "byref": false,
             "curly": false
           },
@@ -62,7 +62,7 @@
       "operator": "=",
       "left": {
         "kind": "variable",
-        "name": "hasil_kelas",
+        "name": "q",
         "byref": false,
         "curly": false
       },
@@ -76,7 +76,7 @@
         "arguments": [
           {
             "kind": "variable",
-            "name": "show_kelas",
+            "name": "query",
             "byref": false,
             "curly": false
           },
