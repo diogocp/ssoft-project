@@ -60,13 +60,17 @@ def parse(s):
         'echo': parse_construct,
         'print': parse_construct,
         'exit': parse_construct,  # die also gets parsed as exit
-        'program': parse_program,
+        'if': parse_if,
+        'while': parse_while,
+        'program': parse_block,
+        'block': parse_block,
         'variable': lambda x: definitions.get(x['name']),
         'offsetlookup': lambda x: parse(x['what']),
         'encapsed': lambda x: any(map(parse, x['value'])),
         'string': lambda x: False,
         'number': lambda x: False,
-        'boolean': lambda x: False
+        'boolean': lambda x: False,
+        'constref': lambda x: False,  # TODO: we many need to taint constants too
     }
     try:
         handler = handlers[s['kind']]
@@ -76,7 +80,17 @@ def parse(s):
     return handler(s)
 
 
-def parse_program(s):
+def parse_if(s):
+    parse(s['body'])
+    if s['alternate'] is not None:
+        parse(s['alternate'])
+
+
+def parse_while(s):
+    parse(s['body'])
+
+
+def parse_block(s):
     for child in s['children']:
         parse(child)
 
