@@ -4,6 +4,42 @@ import sys
 import json
 
 
+Tainted = True
+Untainted = False
+
+
+class SecurityLevel:
+    def __init__(self, tainted, endorsers=list()):
+        self.tainted = tainted
+        self.endorsers = endorsers
+
+    def __eq__(self, other):
+        return NotImplemented
+
+    def __bool__(self):
+        return NotImplemented
+
+    def __or__(self, other):
+        return NotImplemented
+
+    def __add__(self, other):
+        tainted = self.tainted or other.tainted
+        if tainted:
+            return SecurityLevel(Tainted)
+        else:
+            return SecurityLevel(Untainted, self.endorsers + other.endorsers)
+
+    def __radd__(self, other):
+        if other == 0:
+            # This is needed to support the sum function
+            return self
+        else:
+            return NotImplemented
+
+    def __repr__(self):
+        return "(%s, %s)" % ("Tainted" if self.tainted else "Untainted", repr(self.endorsers))
+
+
 class SecurityEnvironment:
     def __init__(self, pattern):
         self.tainted = False
@@ -16,18 +52,18 @@ class SecurityEnvironment:
 
     def is_tainted(self, name):
         try:
-            return self.definitions[name][0]
+            return self.definitions[name]
         except KeyError:
-            return False
+            return SecurityLevel(Untainted)
 
     def taint(self, name):
-        self.definitions[name] = (True, None)
+        self.definitions[name] = SecurityLevel(Tainted, [])
 
-    def untaint(self, name, endorser):
-        self.definitions[name] = (False, endorser)
+    def untaint(self, name, endorsers):
+        self.definitions[name] = SecurityLevel(Untainted, endorsers)
 
     def get_active_endorsers(self):
-        return [d[1] for d in self.definitions if not d[0] and d[1] is not None]
+        return set(endorser for d in self.definitions.values() for endorser in d.endorsers)
 
 
 def main(argv):
@@ -49,8 +85,8 @@ def main(argv):
 
     vulnerabilities = 0
     for pattern in patterns:
+        env = SecurityEnvironment(pattern)
         try:
-            env = SecurityEnvironment(pattern)
             parse(ast, env)
         except AssertionError as e:
             vulnerabilities += 1
@@ -59,9 +95,13 @@ def main(argv):
             return 130
         else:
             endorsers = env.get_active_endorsers()
-            # If a sanitization function was used to untaint a variable, we need to display it
-            endorsers = "." if len(endorsers) == 0 else "; endorsed by " + ", ".join(endorsers)
-            print("%s%s: No vulnerabilities found%s" % (filename, pattern['name'], endorsers), file=sys.stderr)
+            if len(endorsers) == 0:
+                pass  # TODO enable output spam...
+                #print("%s%s: No vulnerabilities found." % (filename, pattern['name']), file=sys.stderr)
+            else:
+                # If a sanitization function was used to untaint a variable, we need to display it
+                print("%s%s: No vulnerabilities found. Endorsers: %s" % (filename, pattern['name'],
+                                                                         ", ".join(endorsers)), file=sys.stderr)
 
     return 0 if vulnerabilities == 0 else 1
 
@@ -69,7 +109,7 @@ def main(argv):
 def parse(s, env):
     handlers = {
         'assign': parse_assign,
-        'bin': lambda x, env: parse(x['left'], env) or parse(x['right'], env),
+        'bin': lambda x, env: parse(x['left'], env) + parse(x['right'], env),
         'call': parse_call,
         'echo': parse_construct,
         'print': parse_construct,
@@ -108,27 +148,30 @@ def parse_block(s, env):
 
 
 def parse_assign(s, env):
-    left = s['left']
-    right = s['right']
-
     # TODO: see what else could be here and how to handle it
     # += -= *= /= %= .= &= |= ^= <<= >>=
     if s['operator'] != "=":
         raise NotImplementedError
 
     # TODO: handle assignments to arrays (e.g. _GET['x'] = 42)
-    if left['kind'] != "variable":
+    if s['left']['kind'] != "variable":
         raise NotImplementedError
 
-    if parse(right, env):
-        env.taint(left['name'])
+    name = s['left']['name']
+    right = parse(s['right'], env)
+
+    if right.tainted:
+        env.taint(name)
+    else:
+        env.untaint(name, right.endorsers)
 
 
 def parse_call(s, env):
-    if not any(parse(arg, env) for arg in s['arguments']):
+    arguments = sum(parse(arg, env) for arg in s['arguments'])
+    if arguments.tainted is Untainted:
         # All arguments safe; assume functions don't make them dangerous
         # TODO: we could check if the function is a sensitive _source_
-        return False
+        return arguments
 
     what = s['what']
     if what['kind'] != "identifier":
@@ -136,19 +179,20 @@ def parse_call(s, env):
 
     if what['name'] in env.endorsers:
         # Endorsers make everything safe
-        return False
+        return SecurityLevel(Untainted, [what['name']])
 
     if what['name'] not in env.sinks:
         # Not a sensitive sink; continue but assume that the return value is unsafe
-        return True
+        return SecurityLevel(Tainted)
 
     # If we reach this point, we have an dangerous argument going into a sensitive sink
     raise AssertionError("found '%s' call with unsafe arguments" % what['name'])
 
 
 def parse_construct(s, env):
+    # We assume any value that these constructs may return is untainted
     if s['kind'] not in env.sinks:
-        return False
+        return SecurityLevel(Untainted)
 
     # arguments may be either an array (when the construct accepts more than one),
     # or an object, when the construct takes a single argument. In the case of exit,
@@ -162,22 +206,18 @@ def parse_construct(s, env):
     else:
         raise NotImplementedError("language construct '%s' not implemented" % s['kind'])
 
-    if any(parse(arg, env) for arg in arguments):
+    if sum(parse(arg, env) for arg in arguments).tainted:
         raise AssertionError("found '%s' with unsafe arguments" % s['kind'])
 
-    return False
+    return SecurityLevel(Untainted)
 
 
 def parse_encapsed(s, env):
-    for elem in s['value']:
-        if parse(elem, env):
-            return True
-
-    return False
+    return sum(parse(elem, env) for elem in s['value'])
 
 
 def parse_literal(s, env):
-    return False
+    return SecurityLevel(Untainted)
 
 
 def read_patterns(filename):
