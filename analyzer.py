@@ -2,60 +2,74 @@
 
 import sys
 import json
-import warnings
 
 
-filename = ""
-pattern = {}
-definitions = {}
+class SecurityEnvironment:
+    def __init__(self, pattern):
+        self.tainted = False
+        self.definitions = {}
+        self.endorsers = pattern['endorsers']
+        self.sinks = pattern['sinks']
+
+        for src in pattern['sources']:
+            self.taint(src)
+
+    def is_tainted(self, name):
+        try:
+            return self.definitions[name][0]
+        except KeyError:
+            return False
+
+    def taint(self, name):
+        self.definitions[name] = (True, None)
+
+    def untaint(self, name, endorser):
+        self.definitions[name] = (False, endorser)
+
+    def get_active_endorsers(self):
+        return [d[1] for d in self.definitions if not d[0] and d[1] is not None]
 
 
 def main(argv):
-    global filename
-    global pattern
-
     if len(argv) > 2:
         print("Usage:", argv[0], "[FILENAME]", file=sys.stderr)
         return 2
     if len(argv) == 2:
         with open(argv[1]) as f:
-            filename = "[" + argv[1] + "] "
             ast = json.load(f)
+            filename = "[" + argv[1] + "] "
     else:
         try:
             ast = json.load(sys.stdin)
+            filename = ""
         except KeyboardInterrupt:
             return 130
 
     patterns = read_patterns("patterns.txt")
 
     vulnerabilities = 0
-    for p in patterns:
-        pattern = p
-        definitions.clear()
-
-        for src in p['sources']:
-            definitions[src] = True
-
+    for pattern in patterns:
         try:
-            parse(ast)
+            env = SecurityEnvironment(pattern)
+            parse(ast, env)
         except AssertionError as e:
             vulnerabilities += 1
-            print("%s%s: %s." % (filename, p['name'], str(e)), file=sys.stderr)
+            print("%s%s: %s." % (filename, pattern['name'], str(e)), file=sys.stderr)
         except KeyboardInterrupt:
             return 130
+        else:
+            endorsers = env.get_active_endorsers()
+            # If a sanitization function was used to untaint a variable, we need to display it
+            endorsers = "." if len(endorsers) == 0 else "; endorsed by " + ", ".join(endorsers)
+            print("%s%s: No vulnerabilities found%s" % (filename, pattern['name'], endorsers), file=sys.stderr)
 
-    if vulnerabilities == 0:
-        print("%sNo vulnerabilities found." % filename, file=sys.stderr)
-        return 0
-    else:
-        return 1
+    return 0 if vulnerabilities == 0 else 1
 
 
-def parse(s):
+def parse(s, env):
     handlers = {
         'assign': parse_assign,
-        'bin': lambda x: parse(x['left']) or parse(x['right']),
+        'bin': lambda x, env: parse(x['left'], env) or parse(x['right'], env),
         'call': parse_call,
         'echo': parse_construct,
         'print': parse_construct,
@@ -64,38 +78,36 @@ def parse(s):
         'while': parse_while,
         'program': parse_block,
         'block': parse_block,
-        'variable': lambda x: definitions.get(x['name']),
-        'offsetlookup': lambda x: parse(x['what']),
-        'encapsed': lambda x: any(map(parse, x['value'])),
-        'string': lambda x: False,
-        'number': lambda x: False,
-        'boolean': lambda x: False,
-        'constref': lambda x: False,  # TODO: we many need to taint constants too
+        'variable': lambda x, env: env.is_tainted(x['name']),
+        'offsetlookup': lambda x, env: parse(x['what'], env),
+        'encapsed': parse_encapsed,
+        'string': parse_literal,
+        'number': parse_literal,
+        'boolean': parse_literal,
+        'constref': parse_literal,  # TODO: we many need to taint constants too
     }
-    try:
-        handler = handlers[s['kind']]
-    except KeyError:
-        warnings.warn("no handler for nodes of kind '%s'" % s['kind'])
-        return False
-    return handler(s)
+
+    handler = handlers[s['kind']]
+
+    return handler(s, env)
 
 
-def parse_if(s):
-    parse(s['body'])
+def parse_if(s, env):
+    parse(s['body'], env)
     if s['alternate'] is not None:
-        parse(s['alternate'])
+        parse(s['alternate'], env)
 
 
-def parse_while(s):
-    parse(s['body'])
+def parse_while(s, env):
+    parse(s['body'], env)
 
 
-def parse_block(s):
+def parse_block(s, env):
     for child in s['children']:
-        parse(child)
+        parse(child, env)
 
 
-def parse_assign(s):
+def parse_assign(s, env):
     left = s['left']
     right = s['right']
 
@@ -107,13 +119,13 @@ def parse_assign(s):
     # TODO: handle assignments to arrays (e.g. _GET['x'] = 42)
     if left['kind'] != "variable":
         raise NotImplementedError
-    name = left['name']
 
-    definitions[name] = parse(right)
+    if parse(right, env):
+        env.taint(left['name'])
 
 
-def parse_call(s):
-    if not any(parse(arg) for arg in s['arguments']):
+def parse_call(s, env):
+    if not any(parse(arg, env) for arg in s['arguments']):
         # All arguments safe; assume functions don't make them dangerous
         # TODO: we could check if the function is a sensitive _source_
         return False
@@ -122,11 +134,11 @@ def parse_call(s):
     if what['kind'] != "identifier":
         raise NotImplementedError
 
-    if what['name'] in pattern['downgraders']:
-        # Downgraders make everything safe
+    if what['name'] in env.endorsers:
+        # Endorsers make everything safe
         return False
 
-    if what['name'] not in pattern['sinks']:
+    if what['name'] not in env.sinks:
         # Not a sensitive sink; continue but assume that the return value is unsafe
         return True
 
@@ -134,8 +146,8 @@ def parse_call(s):
     raise AssertionError("found '%s' call with unsafe arguments" % what['name'])
 
 
-def parse_construct(s):
-    if s['kind'] not in pattern['sinks']:
+def parse_construct(s, env):
+    if s['kind'] not in env.sinks:
         return False
 
     # arguments may be either an array (when the construct accepts more than one),
@@ -150,9 +162,21 @@ def parse_construct(s):
     else:
         raise NotImplementedError("language construct '%s' not implemented" % s['kind'])
 
-    if any(parse(arg) for arg in arguments):
+    if any(parse(arg, env) for arg in arguments):
         raise AssertionError("found '%s' with unsafe arguments" % s['kind'])
 
+    return False
+
+
+def parse_encapsed(s, env):
+    for elem in s['value']:
+        if parse(elem, env):
+            return True
+
+    return False
+
+
+def parse_literal(s, env):
     return False
 
 
@@ -169,22 +193,17 @@ def read_patterns(filename):
         while True:
             name = next(lines)
             sources = next(lines).split(',')
-            downgraders = next(lines).split(',')
+            endorsers = next(lines).split(',')
             sinks = next(lines).split(',')
 
             # Remove $ from the beginning of variable names
             sources = [s[1:] if s.startswith("$") else s for s in sources]
 
-            patterns.append({'name': name, 'sources': sources, 'downgraders': downgraders, 'sinks': sinks})
+            patterns.append({'name': name, 'sources': sources, 'endorsers': endorsers, 'sinks': sinks})
     except StopIteration:
         pass
 
     return patterns
-
-
-def showwarning(message, *unused, file=sys.stderr):
-    print("%sWarning:" % filename, message, file=file)
-warnings.showwarning = showwarning
 
 
 if __name__ == '__main__':
