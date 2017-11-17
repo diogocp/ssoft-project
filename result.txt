@@ -1,0 +1,22 @@
+slices/slice10.json
+slices/slice11.json
+slices/slice_1.json
+slices/slice1.json
+[slices/slice1.json] SQL injection (mysql_query): found 'mysql_query' call with unsafe arguments.
+slices/slice_2.json
+[slices/slice_2.json] SQL injection (mysql_query): found 'mysql_query' call with unsafe arguments.
+slices/slice2.json
+[slices/slice2.json] SQL injection (mysql_query): found 'mysql_query' call with unsafe arguments.
+slices/slice3.json
+[slices/slice3.json] SQL injection (mysql_query): found 'mysql_query' call with unsafe arguments.
+slices/slice4.json
+[slices/slice4.json] SQL injection (mysql_query): found 'mysql_query' call with unsafe arguments.
+slices/slice5.json
+[slices/slice5.json] SQL injection (mysql_query): found 'mysql_query' call with unsafe arguments.
+slices/slice6.json
+[slices/slice6.json] Cross site scripting: found 'echo' with unsafe arguments.
+slices/slice7.json
+[slices/slice7.json] SQL injection (mysql_query): found 'mysql_query' call with unsafe arguments.
+slices/slice8.json
+slices/slice9.json
+[slices/slice9.json] SQL injection (mysql_query): found 'mysql_query' call with unsafe arguments.
