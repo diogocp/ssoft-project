@@ -141,29 +141,33 @@ def parse_if(s, env):
 def parse_while(s, env):
     parse(s['body'], env)
 
-
+ #    raise NotImplementedError
+        
 def parse_block(s, env):
     for child in s['children']:
         parse(child, env)
 
 
 def parse_assign(s, env):
-    # TODO: see what else could be here and how to handle it
+    left = parse(s['left'], env)
+    right = parse(s['right'], env)
+    name = s['left']['name']
+
     # += -= *= /= %= .= &= |= ^= <<= >>=
     if s['operator'] != "=":
-        raise NotImplementedError
-
-    # TODO: handle assignments to arrays (e.g. _GET['x'] = 42)
-    if s['left']['kind'] != "variable":
-        raise NotImplementedError
-
-    name = s['left']['name']
-    right = parse(s['right'], env)
-
-    if right.tainted:
-        env.taint(name)
+        if left.tainted or right.tainted:
+            env.taint(name)
+        else:
+            env.untaint(name, right.endorsers)
     else:
-        env.untaint(name, right.endorsers)
+        # TODO: handle assignments to arrays (e.g. _GET['x'] = 42)
+        if s['left']['kind'] != "variable":
+            raise NotImplementedError
+
+        if right.tainted:
+            env.taint(name)
+        else:
+            env.untaint(name, right.endorsers)
 
 
 def parse_call(s, env):
