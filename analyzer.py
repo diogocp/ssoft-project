@@ -12,7 +12,7 @@ Untainted = False
 class SecurityLevel:
     def __init__(self, tainted, endorsers=None):
         self.tainted = tainted
-        self.endorsers = endorsers if endorsers is not None else []
+        self.endorsers = endorsers if endorsers is not None else set()
 
     def __eq__(self, other):
         return NotImplemented
@@ -28,7 +28,7 @@ class SecurityLevel:
         if tainted:
             return SecurityLevel(Tainted)
         else:
-            return SecurityLevel(Untainted, self.endorsers + other.endorsers)
+            return SecurityLevel(Untainted, self.endorsers | other.endorsers)
 
     def __radd__(self, other):
         if other == 0:
@@ -47,6 +47,7 @@ class SecurityEnvironment:
         self.definitions = {}
         self.endorsers = set(pattern['endorsers'])
         self.sinks = set(pattern['sinks'])
+        self.active_endorsers = set()
 
         for src in pattern['sources']:
             self.taint(src)
@@ -74,7 +75,7 @@ class SecurityEnvironment:
         # 'A', "A", "\x41" and "\101" refer to the same offset.
         self.definitions = {k: v for k, v in self.definitions.items()
                             if not k.startswith(name + "[")}
-        self.definitions[name] = SecurityLevel(Tainted, [])
+        self.definitions[name] = SecurityLevel(Tainted)
 
     def untaint(self, name, offset=None, endorsers=None):
         if offset is not None:
@@ -82,8 +83,16 @@ class SecurityEnvironment:
 
         self.definitions[name] = SecurityLevel(Untainted, endorsers)
 
-    def get_active_endorsers(self):
-        return set(endorser for d in self.definitions.values() for endorser in d.endorsers)
+
+class SecurityException(Exception):
+    """Exception raised when tainted arguments are passed to a sensitive sink.
+
+    Attributes:
+        expression -- input expression in which the error occurred
+    """
+
+    def __init__(self, sink):
+        self.sink = sink
 
 
 def main(argv):
@@ -93,11 +102,9 @@ def main(argv):
     if len(argv) == 2:
         with open(argv[1]) as f:
             ast = json.load(f)
-            filename = "[" + argv[1] + "] "
     else:
         try:
             ast = json.load(sys.stdin)
-            filename = ""
         except KeyboardInterrupt:
             return 130
 
@@ -106,24 +113,26 @@ def main(argv):
     vulnerabilities = 0
     for pattern in patterns:
         env = SecurityEnvironment(pattern)
+
         try:
             parse(ast, env)
-        except AssertionError as e:
+        except SecurityException:
             vulnerabilities += 1
-            print("%s%s: %s." % (filename, pattern['name'], str(e)), file=sys.stderr)
+            print("WARNING: found possible vulnerability:", pattern['name'])
         except KeyboardInterrupt:
             return 130
         else:
-            endorsers = env.get_active_endorsers()
-            if len(endorsers) == 0:
-                pass  # TODO enable output spam...
-                #print("%s%s: No vulnerabilities found." % (filename, pattern['name']), file=sys.stderr)
-            else:
-                # If a sanitization function was used to untaint a variable, we need to display it
-                print("%s%s: No vulnerabilities found. Endorsers: %s" % (filename, pattern['name'],
-                                                                         ", ".join(endorsers)), file=sys.stderr)
+            if len(env.active_endorsers) > 0:
+                # If any endorsed variables were passed to sensitive sinks,
+                # we print the names of the endorsers used.
+                endorsers = ", ".join(env.active_endorsers)
+                print("No %s vulnerabilities found due to endorsers: %s" % (pattern['name'], endorsers))
 
-    return 0 if vulnerabilities == 0 else 1
+    if vulnerabilities == 0:
+        print("No vulnerabilities found.")
+        return 0
+    else:
+        return 1
 
 
 def parse(s, env):
@@ -221,26 +230,31 @@ def parse_assign(s, env):
 
 
 def parse_call(s, env):
-    arguments = sum(parse(arg, env) for arg in s['arguments'])
-    if arguments.tainted is Untainted:
-        # All arguments safe; assume functions don't make them dangerous
-        # TODO: we could check if the function is a sensitive _source_
-        return arguments
-
     what = s['what']
     if what['kind'] != "identifier":
         raise NotImplementedError
 
     if what['name'] in env.endorsers:
-        # Endorsers make everything safe
-        return SecurityLevel(Untainted, [what['name']])
+        # Endorsers always return untainted.
+        # We assume they don't have side effects.
+        return SecurityLevel(Untainted, {what['name']})
+
+    # Check if any argument is tainted
+    arguments = sum(parse(arg, env) for arg in s['arguments'])
 
     if what['name'] not in env.sinks:
-        # Not a sensitive sink; continue but assume that the return value is unsafe
-        return SecurityLevel(Tainted)
+        # Not a sensitive sink; continue assuming that the
+        # return value is tainted if any argument is tainted.
+        return arguments
 
-    # If we reach this point, we have an dangerous argument going into a sensitive sink
-    raise AssertionError("found '%s' call with unsafe arguments" % what['name'])
+    if arguments.tainted:
+        # Tainted argument passed to sensitive sink!
+        raise SecurityException(what['name'])
+    else:
+        # Untainted argument passed to sensitive sink.
+        # Mark endorsers as active.
+        env.active_endorsers |= arguments.endorsers
+        return arguments
 
 
 def parse_construct(s, env):
@@ -261,7 +275,7 @@ def parse_construct(s, env):
         raise NotImplementedError("language construct '%s' not implemented" % s['kind'])
 
     if sum(parse(arg, env) for arg in arguments).tainted:
-        raise AssertionError("found '%s' with unsafe arguments" % s['kind'])
+        raise SecurityException(s['kind'])
 
     return SecurityLevel(Untainted)
 
