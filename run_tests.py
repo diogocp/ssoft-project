@@ -30,6 +30,7 @@ def main():
         Slice("safe_literal", None),
         Slice("dot_equals", "SQL injection"),
         Slice("while_backward_untaint", "SQL injection"),
+        Slice("while_untainted_guard", None),
         Slice("untainted_offset", None),
     ]
 

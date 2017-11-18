@@ -43,7 +43,7 @@ class SecurityLevel:
 
 class SecurityEnvironment:
     def __init__(self, pattern):
-        self.tainted = False
+        self.default_level = Untainted
         self.definitions = {}
         self.endorsers = set(pattern['endorsers'])
         self.sinks = set(pattern['sinks'])
@@ -52,11 +52,8 @@ class SecurityEnvironment:
         for src in pattern['sources']:
             self.taint(src)
 
-    def merge(self, other):
-        self.tainted |= other.tainted
+    def merge_definitions(self, other):
         self.definitions.update({k: v for k, v in other.definitions.items() if v.tainted})
-        self.endorsers &= other.sinks
-        self.sinks |= other.sinks
 
     def is_tainted(self, name, offset=None):
         if offset is not None:
@@ -163,30 +160,37 @@ def parse(s, env):
 
 def parse_if(s, env):
     # Tests can have side effects, so we must always parse them
-    parse(s['test'], env)
+    test = parse(s['test'], env)
 
     # Evaluate the if body in a copy of the environment
     env_if = copy.deepcopy(env)
+    env_if.default_level = test.tainted
     parse(s['body'], env_if)
 
-    # If there is an else, evaluate it too, but on the
-    # original environment, since we only go into the
-    # alternate if we don't go into the if body
+    # If there is an else, evaluate it too, but on a clean
+    # environment, not the one modified by the if body, since
+    # we only go into the alternate if we don't go into the if.
     if s['alternate'] is not None:
-        parse(s['alternate'], env)
+        env_else = copy.deepcopy(env)
+        env_else.default_level = test.tainted
+        parse(s['alternate'], env_else)
+        env_if.merge_definitions(env_else)
 
     # Finally, merge both environments (if and alternate)
-    env.merge(env_if)
+    env.merge_definitions(env_if)
 
 
 def parse_while(s, env):
-    parse(s['test'], env)
+    test = parse(s['test'], env)
 
     env_loop = copy.deepcopy(env)
+    env_loop.default_level = test.tainted
+
     for _ in s['body']['children']:
         parse(s['body'], env_loop)
-        parse(s['test'], env_loop)
-        env.merge(env_loop)
+        test = parse(s['test'], env_loop)
+        env_loop.default_level = test.tainted
+        env.merge_definitions(env_loop)
 
 
 def parse_block(s, env):
@@ -214,7 +218,7 @@ def parse_assign(s, env):
 
     if s['operator'] == "=":
         right = parse(s['right'], env)
-        if right.tainted:
+        if right.tainted or env.default_level:
             env.taint(name, offset)
         else:
             env.untaint(name, offset, right.endorsers)
@@ -223,7 +227,7 @@ def parse_assign(s, env):
         # combine the taintedness of the left and right sides
         left = parse(s['left'], env)
         right = parse(s['right'], env)
-        if left.tainted or right.tainted:
+        if left.tainted or right.tainted or env.default_level:
             env.taint(name, offset)
         else:
             env.untaint(name, offset, left.endorsers + right.endorsers)
