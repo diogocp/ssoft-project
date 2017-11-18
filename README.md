@@ -16,9 +16,9 @@ program will read from stdin.
 ./analyzer.py slices/slice1.json
 ```
 
-To run the analyzer on all slices:
+To run the tests:
 ```sh
-find slices/ -name "*.json" -exec ./analyzer.py "{}" \;
+./run_tests
 ```
 
 
