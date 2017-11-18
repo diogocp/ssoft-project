@@ -6,31 +6,39 @@ import analyzer
 
 
 class Slice:
-    def __init__(self, filename, pattern=None, endorsers=None):
+    def __init__(self, filename, pattern, endorsers=None):
         self.filename = filename
         self.pattern = pattern
         self.endorsers = endorsers
 
 
 def main():
+    basedir = "slices/"
+    fileext = ".json"
+
     slices = [
-        Slice("slices/slice1.json", "SQL injection"),
-        Slice("slices/slice2.json", "SQL injection"),
-        Slice("slices/slice3.json", "SQL injection"),
-        Slice("slices/slice4.json", "SQL injection"),
-        Slice("slices/slice5.json", "SQL injection"),
-        Slice("slices/slice6.json", "Cross site scripting"),
-        Slice("slices/slice7.json", "SQL injection"),
-        Slice("slices/slice9.json", "SQL injection"),
-        Slice("slices/slice10.json", "SQL injection"),
-        Slice("slices/slice11.json", "SQL injection")
+        Slice("slice1", "SQL injection"),
+        Slice("slice2", "SQL injection"),
+        Slice("slice3", "SQL injection"),
+        Slice("slice4", "SQL injection"),
+        Slice("slice5", "SQL injection"),
+        Slice("slice6", "Cross site scripting"),
+        Slice("slice7", "SQL injection"),
+        Slice("slice9", "SQL injection"),
+        Slice("slice10", "SQL injection"),
+        Slice("slice11", "SQL injection"),
+        Slice("safe_literal", None),
+        Slice("dot_equals", "SQL injection"),
+        Slice("while_backward_untaint", "SQL injection"),
+        Slice("untainted_offset", None),
     ]
 
     original_stdout = sys.stdout
     failures = 0
     for s in slices:
         with io.StringIO() as sys.stdout:
-            analyzer.main([None, s.filename])
+            filename = basedir + s.filename + fileext
+            analyzer.main([None, filename])
 
             if check_output(s, sys.stdout.getvalue()):
                 print("[ OK ]", s.filename, file=original_stdout)
