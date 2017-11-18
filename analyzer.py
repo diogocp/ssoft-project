@@ -126,7 +126,7 @@ def main(argv):
                 # If any endorsed variables were passed to sensitive sinks,
                 # we print the names of the endorsers used.
                 endorsers = ", ".join(env.active_endorsers)
-                print("No %s vulnerabilities found due to endorsers: %s" % (pattern['name'], endorsers))
+                print("No %s vulnerability due to endorsers: %s" % (pattern['name'], endorsers))
 
     if vulnerabilities == 0:
         print("No vulnerabilities found.")
