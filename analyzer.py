@@ -62,19 +62,12 @@ class SecurityEnvironment:
             return SecurityLevel(Untainted)
 
     def taint(self, name, offset=None):
-        if offset is not None:
-            # If an offset is specified, we must also taint the base
-            # name to ensure we don't leak through an offset alias
-            self.definitions[name] = SecurityLevel(Tainted, [])
-            name = "%s[%s]" % (name, offset)
-            self.definitions[name] = SecurityLevel(Tainted, [])
-        else:
-            # If an offset is not specified (either because we want
-            # to taint the whole array or because the offset is not
-            # a literal), we must also remove any untainted offsets
-            self.definitions = {k: v for k, v in self.definitions.items()
-                                if not k.startswith(name + "[")}
-            self.definitions[name] = SecurityLevel(Tainted, [])
+        # When tainting any part of an array, we must taint the whole
+        # array, to prevent leaks through offset aliases. For example,
+        # 'A', "A", "\x41" and "\101" refer to the same offset.
+        self.definitions = {k: v for k, v in self.definitions.items()
+                            if not k.startswith(name + "[")}
+        self.definitions[name] = SecurityLevel(Tainted, [])
 
     def untaint(self, name, offset=None, endorsers=None):
         if offset is not None:
