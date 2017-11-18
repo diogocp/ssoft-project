@@ -2,6 +2,7 @@
 
 import sys
 import json
+import copy
 
 
 Tainted = True
@@ -44,11 +45,17 @@ class SecurityEnvironment:
     def __init__(self, pattern):
         self.tainted = False
         self.definitions = {}
-        self.endorsers = pattern['endorsers']
-        self.sinks = pattern['sinks']
+        self.endorsers = set(pattern['endorsers'])
+        self.sinks = set(pattern['sinks'])
 
         for src in pattern['sources']:
             self.taint(src)
+
+    def merge(self, other):
+        self.tainted |= other.tainted
+        self.definitions.update({k: v for k, v in other.definitions.items() if v.tainted})
+        self.endorsers &= other.sinks
+        self.sinks |= other.sinks
 
     def is_tainted(self, name, offset=None):
         if offset is not None:
@@ -152,7 +159,13 @@ def parse_if(s, env):
 
 
 def parse_while(s, env):
-    parse(s['body'], env)
+    parse(s['test'], env)
+
+    env_loop = copy.deepcopy(env)
+    for _ in s['body']['children']:
+        parse(s['body'], env_loop)
+        parse(s['test'], env_loop)
+        env.merge(env_loop)
 
 
 def parse_block(s, env):
