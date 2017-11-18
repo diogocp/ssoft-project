@@ -153,9 +153,21 @@ def parse(s, env):
 
 
 def parse_if(s, env):
-    parse(s['body'], env)
+    # Tests can have side effects, so we must always parse them
+    parse(s['test'], env)
+
+    # Evaluate the if body in a copy of the environment
+    env_if = copy.deepcopy(env)
+    parse(s['body'], env_if)
+
+    # If there is an else, evaluate it too, but on the
+    # original environment, since we only go into the
+    # alternate if we don't go into the if body
     if s['alternate'] is not None:
         parse(s['alternate'], env)
+
+    # Finally, merge both environments (if and alternate)
+    env.merge(env_if)
 
 
 def parse_while(s, env):
