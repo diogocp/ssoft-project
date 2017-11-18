@@ -1,0 +1,58 @@
+{
+  "kind": "program",
+  "children": [
+    {
+      "kind": "assign",
+      "operator": "=",
+      "left": {
+        "kind": "variable",
+        "name": "x",
+        "byref": false,
+        "curly": false
+      },
+      "right": {
+        "kind": "offsetlookup",
+        "what": {
+          "kind": "variable",
+          "name": "_GET",
+          "byref": false,
+          "curly": false
+        },
+        "offset": {
+          "kind": "string",
+          "value": "x",
+          "isDoubleQuote": false
+        }
+      }
+    },
+    {
+      "kind": "do",
+      "test": {
+        "kind": "boolean",
+        "value": false
+      },
+      "body": {
+        "kind": "block",
+        "children": [
+          {
+            "kind": "call",
+            "what": {
+              "kind": "identifier",
+              "resolution": "uqn",
+              "name": "mysql_query"
+            },
+            "arguments": [
+              {
+                "kind": "variable",
+                "name": "x",
+                "byref": false,
+                "curly": false
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "errors": []
+}

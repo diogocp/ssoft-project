@@ -32,6 +32,8 @@ def main():
         Slice("while_backward_untaint", "SQL injection"),
         Slice("while_untainted_guard", None),
         Slice("untainted_offset", None),
+        Slice("dowhile", "SQL injection"),
+        Slice("for", "SQL injection"),
     ]
 
     original_stdout = sys.stdout

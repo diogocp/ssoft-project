@@ -1,0 +1,99 @@
+{
+  "kind": "program",
+  "children": [
+    {
+      "kind": "assign",
+      "operator": "=",
+      "left": {
+        "kind": "variable",
+        "name": "x",
+        "byref": false,
+        "curly": false
+      },
+      "right": {
+        "kind": "offsetlookup",
+        "what": {
+          "kind": "variable",
+          "name": "_GET",
+          "byref": false,
+          "curly": false
+        },
+        "offset": {
+          "kind": "string",
+          "value": "x",
+          "isDoubleQuote": false
+        }
+      }
+    },
+    {
+      "kind": "for",
+      "init": [
+        {
+          "kind": "assign",
+          "operator": "=",
+          "left": {
+            "kind": "variable",
+            "name": "i",
+            "byref": false,
+            "curly": false
+          },
+          "right": {
+            "kind": "number",
+            "value": "1"
+          }
+        }
+      ],
+      "test": [
+        {
+          "kind": "bin",
+          "type": "<=",
+          "left": {
+            "kind": "variable",
+            "name": "i",
+            "byref": false,
+            "curly": false
+          },
+          "right": {
+            "kind": "number",
+            "value": "10"
+          }
+        }
+      ],
+      "increment": [
+        {
+          "kind": "post",
+          "type": "+",
+          "what": {
+            "kind": "variable",
+            "name": "i",
+            "byref": false,
+            "curly": false
+          }
+        }
+      ],
+      "shortForm": false,
+      "body": {
+        "kind": "block",
+        "children": [
+          {
+            "kind": "call",
+            "what": {
+              "kind": "identifier",
+              "resolution": "uqn",
+              "name": "mysql_query"
+            },
+            "arguments": [
+              {
+                "kind": "variable",
+                "name": "x",
+                "byref": false,
+                "curly": false
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "errors": []
+}

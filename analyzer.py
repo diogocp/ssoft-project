@@ -135,6 +135,8 @@ def main(argv):
 def parse(s, env):
     handlers = {
         'assign': parse_assign,
+        'pre': lambda x, env: parse(x['what'], env),
+        'post': lambda x, env: parse(x['what'], env),
         'bin': lambda x, env: parse(x['left'], env) + parse(x['right'], env),
         'call': parse_call,
         'echo': parse_construct,
@@ -142,6 +144,8 @@ def parse(s, env):
         'exit': parse_construct,  # die also gets parsed as exit
         'if': parse_if,
         'while': parse_while,
+        'do': parse_dowhile,
+        'for': parse_for,
         'program': parse_block,
         'block': parse_block,
         'variable': lambda x, env: env.is_tainted(x['name']),
@@ -184,12 +188,50 @@ def parse_while(s, env):
     test = parse(s['test'], env)
 
     env_loop = copy.deepcopy(env)
-    env_loop.default_level = test.tainted
+    env_loop.default_level |= test.tainted
 
     for _ in s['body']['children']:
         parse(s['body'], env_loop)
         test = parse(s['test'], env_loop)
-        env_loop.default_level = test.tainted
+        env_loop.default_level |= test.tainted
+        env.merge_definitions(env_loop)
+
+
+def parse_dowhile(s, env):
+    # do-while loops can be seen as a while loop
+    # preceded by an execution of the loop body.
+    parse(s['body'], env)
+    parse_while(s, env)
+
+
+def parse_for(s, env):
+    # init may contain multiple expressions
+    for expr in s['init']:
+        parse(expr, env)
+
+    # test may also contain multiple expressions!
+    # The result of the last expression determines
+    # whether the body is executed, so that is the
+    # one that may taint assignments in the body.
+    # However, the other expressions must also be
+    # evaluated for their side effects.
+    test = SecurityLevel(Untainted)
+    for expr in s['test']:
+        test = parse(expr, env)
+
+    env_loop = copy.deepcopy(env)
+    env_loop.default_level |= test.tainted
+
+    for _ in s['body']['children']:
+        parse(s['body'], env_loop)
+
+        for expr in s['increment']:
+            parse(expr, env_loop)
+
+        for expr in s['test']:
+            test = parse(expr, env_loop)
+
+        env_loop.default_level |= test.tainted
         env.merge_definitions(env_loop)
 
 
