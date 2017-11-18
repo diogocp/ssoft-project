@@ -9,9 +9,9 @@ Untainted = False
 
 
 class SecurityLevel:
-    def __init__(self, tainted, endorsers=list()):
+    def __init__(self, tainted, endorsers=None):
         self.tainted = tainted
-        self.endorsers = endorsers
+        self.endorsers = endorsers if endorsers is not None else []
 
     def __eq__(self, other):
         return NotImplemented
@@ -50,16 +50,36 @@ class SecurityEnvironment:
         for src in pattern['sources']:
             self.taint(src)
 
-    def is_tainted(self, name):
+    def is_tainted(self, name, offset=None):
+        if offset is not None:
+            fullname = "%s[%s]" % (name, offset)
+            if fullname in self.definitions:
+                return self.definitions[fullname]
+
         try:
             return self.definitions[name]
         except KeyError:
             return SecurityLevel(Untainted)
 
-    def taint(self, name):
-        self.definitions[name] = SecurityLevel(Tainted, [])
+    def taint(self, name, offset=None):
+        if offset is not None:
+            # If an offset is specified, we must also taint the base
+            # name to ensure we don't leak through an offset alias
+            self.definitions[name] = SecurityLevel(Tainted, [])
+            name = "%s[%s]" % (name, offset)
+            self.definitions[name] = SecurityLevel(Tainted, [])
+        else:
+            # If an offset is not specified (either because we want
+            # to taint the whole array or because the offset is not
+            # a literal), we must also remove any untainted offsets
+            self.definitions = {k: v for k, v in self.definitions.items()
+                                if not k.startswith(name + "[")}
+            self.definitions[name] = SecurityLevel(Tainted, [])
 
-    def untaint(self, name, endorsers):
+    def untaint(self, name, offset=None, endorsers=None):
+        if offset is not None:
+            name = "%s[%s]" % (name, offset)
+
         self.definitions[name] = SecurityLevel(Untainted, endorsers)
 
     def get_active_endorsers(self):
@@ -119,7 +139,7 @@ def parse(s, env):
         'program': parse_block,
         'block': parse_block,
         'variable': lambda x, env: env.is_tainted(x['name']),
-        'offsetlookup': lambda x, env: parse(x['what'], env),
+        'offsetlookup': parse_offsetlookup,
         'encapsed': parse_encapsed,
         'string': parse_literal,
         'number': parse_literal,
@@ -141,33 +161,45 @@ def parse_if(s, env):
 def parse_while(s, env):
     parse(s['body'], env)
 
- #    raise NotImplementedError
-        
+
 def parse_block(s, env):
     for child in s['children']:
         parse(child, env)
 
 
-def parse_assign(s, env):
-    left = parse(s['left'], env)
-    right = parse(s['right'], env)
-    name = s['left']['name']
-
-    # += -= *= /= %= .= &= |= ^= <<= >>=
-    if s['operator'] != "=":
-        if left.tainted or right.tainted:
-            env.taint(name)
-        else:
-            env.untaint(name, right.endorsers)
+def parse_offsetlookup(s, env):
+    if s['what']['kind'] == "variable":
+        return env.is_tainted(s['what']['name'], offset_to_string(s['offset']))
     else:
-        # TODO: handle assignments to arrays (e.g. _GET['x'] = 42)
-        if s['left']['kind'] != "variable":
-            raise NotImplementedError
+        return parse(s['what'], env)
 
+
+def parse_assign(s, env):
+    kind = s['left']['kind']
+    if kind == "variable":
+        name = s['left']['name']
+        offset = None
+    elif kind == "offsetlookup":
+        name = s['left']['what']['name']
+        offset = offset_to_string(s['left']['offset'])
+    else:
+        raise NotImplementedError("assignment to kind %s" % kind)
+
+    if s['operator'] == "=":
+        right = parse(s['right'], env)
         if right.tainted:
-            env.taint(name)
+            env.taint(name, offset)
         else:
-            env.untaint(name, right.endorsers)
+            env.untaint(name, offset, right.endorsers)
+    else:
+        # The other assignment operators (+=, -=, *=, etc.)
+        # combine the taintedness of the left and right sides
+        left = parse(s['left'], env)
+        right = parse(s['right'], env)
+        if left.tainted or right.tainted:
+            env.taint(name, offset)
+        else:
+            env.untaint(name, offset, left.endorsers + right.endorsers)
 
 
 def parse_call(s, env):
@@ -222,6 +254,25 @@ def parse_encapsed(s, env):
 
 def parse_literal(s, env):
     return SecurityLevel(Untainted)
+
+
+def offset_to_string(s):
+    try:
+        kind = s['kind']
+        value = s['value']
+
+        if kind in ["number", "boolean"]:
+            return value
+
+        if kind == "string":
+            if s['isDoubleQuote']:
+                return '"%s"' % value
+            else:
+                return "'%s'" % value
+
+        return None
+    except KeyError:
+        return None
 
 
 def read_patterns(filename):
