@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import io
+import re
 import sys
 import analyzer
 
@@ -34,6 +35,7 @@ def main():
         Slice("untainted_offset", None),
         Slice("dowhile", "SQL injection"),
         Slice("for", "SQL injection"),
+        Slice("sql_escaped", "SQL injection", "mysql_escape_string"),
     ]
 
     original_stdout = sys.stdout
@@ -63,7 +65,7 @@ def check_output(s, output):
         return output.startswith("WARNING: found possible vulnerability: " + s.pattern)
 
     # Endorsed
-    return output.startswith("No %s vulnerability due to endorsers: %s" % (s.pattern, s.endorsers))
+    return re.match("No %s .* endorsers: %s" % (s.pattern, s.endorsers), output) is not None
 
 
 if __name__ == '__main__':
