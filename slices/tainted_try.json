@@ -1,0 +1,261 @@
+{
+  "kind": "program",
+  "children": [
+    {
+      "kind": "try",
+      "body": {
+        "kind": "block",
+        "children": [
+          {
+            "kind": "assign",
+            "operator": "=",
+            "left": {
+              "kind": "variable",
+              "name": "q",
+              "byref": false,
+              "curly": false
+            },
+            "right": {
+              "kind": "bin",
+              "type": ".",
+              "left": {
+                "kind": "bin",
+                "type": ".",
+                "left": {
+                  "kind": "string",
+                  "value": "SELECT * FROM users WHERE sex='",
+                  "isDoubleQuote": true
+                },
+                "right": {
+                  "kind": "call",
+                  "what": {
+                    "kind": "identifier",
+                    "resolution": "uqn",
+                    "name": "mysql_real_escape_string"
+                  },
+                  "arguments": [
+                    {
+                      "kind": "offsetlookup",
+                      "what": {
+                        "kind": "variable",
+                        "name": "_GET",
+                        "byref": false,
+                        "curly": false
+                      },
+                      "offset": {
+                        "kind": "string",
+                        "value": "sex",
+                        "isDoubleQuote": false
+                      }
+                    }
+                  ]
+                }
+              },
+              "right": {
+                "kind": "string",
+                "value": "';",
+                "isDoubleQuote": true
+              }
+            }
+          },
+          {
+            "kind": "assign",
+            "operator": "=",
+            "left": {
+              "kind": "variable",
+              "name": "result",
+              "byref": false,
+              "curly": false
+            },
+            "right": {
+              "kind": "call",
+              "what": {
+                "kind": "identifier",
+                "resolution": "uqn",
+                "name": "mysql_query"
+              },
+              "arguments": [
+                {
+                  "kind": "variable",
+                  "name": "q",
+                  "byref": false,
+                  "curly": false
+                }
+              ]
+            }
+          },
+          {
+            "kind": "assign",
+            "operator": "=",
+            "left": {
+              "kind": "variable",
+              "name": "average_age",
+              "byref": false,
+              "curly": false
+            },
+            "right": {
+              "kind": "number",
+              "value": "0"
+            }
+          },
+          {
+            "kind": "while",
+            "test": {
+              "kind": "assign",
+              "operator": "=",
+              "left": {
+                "kind": "variable",
+                "name": "usr",
+                "byref": false,
+                "curly": false
+              },
+              "right": {
+                "kind": "call",
+                "what": {
+                  "kind": "identifier",
+                  "resolution": "uqn",
+                  "name": "mysql_fetch_assoc"
+                },
+                "arguments": [
+                  {
+                    "kind": "variable",
+                    "name": "result",
+                    "byref": false,
+                    "curly": false
+                  }
+                ]
+              }
+            },
+            "body": {
+              "kind": "block",
+              "children": [
+                {
+                  "kind": "assign",
+                  "operator": "+=",
+                  "left": {
+                    "kind": "variable",
+                    "name": "average_age",
+                    "byref": false,
+                    "curly": false
+                  },
+                  "right": {
+                    "kind": "offsetlookup",
+                    "what": {
+                      "kind": "variable",
+                      "name": "usr",
+                      "byref": false,
+                      "curly": false
+                    },
+                    "offset": {
+                      "kind": "string",
+                      "value": "age",
+                      "isDoubleQuote": false
+                    }
+                  }
+                },
+                {
+                  "kind": "assign",
+                  "operator": "+=",
+                  "left": {
+                    "kind": "variable",
+                    "name": "count",
+                    "byref": false,
+                    "curly": false
+                  },
+                  "right": {
+                    "kind": "number",
+                    "value": "1"
+                  }
+                }
+              ]
+            },
+            "shortForm": false
+          },
+          {
+            "kind": "echo",
+            "arguments": [
+              {
+                "kind": "bin",
+                "type": "/",
+                "left": {
+                  "kind": "variable",
+                  "name": "average_age",
+                  "byref": false,
+                  "curly": false
+                },
+                "right": {
+                  "kind": "variable",
+                  "name": "count",
+                  "byref": false,
+                  "curly": false
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "catches": [
+        {
+          "kind": "catch",
+          "body": {
+            "kind": "block",
+            "children": [
+              {
+                "kind": "echo",
+                "arguments": [
+                  {
+                    "kind": "bin",
+                    "type": ".",
+                    "left": {
+                      "kind": "bin",
+                      "type": ".",
+                      "left": {
+                        "kind": "string",
+                        "value": "Error querying by ",
+                        "isDoubleQuote": true
+                      },
+                      "right": {
+                        "kind": "offsetlookup",
+                        "what": {
+                          "kind": "variable",
+                          "name": "_GET",
+                          "byref": false,
+                          "curly": false
+                        },
+                        "offset": {
+                          "kind": "string",
+                          "value": "sex",
+                          "isDoubleQuote": false
+                        }
+                      }
+                    },
+                    "right": {
+                      "kind": "string",
+                      "value": " sex.",
+                      "isDoubleQuote": true
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "what": [
+            {
+              "kind": "identifier",
+              "resolution": "uqn",
+              "name": "DivisionByZeroError"
+            }
+          ],
+          "variable": {
+            "kind": "variable",
+            "name": "e",
+            "byref": false,
+            "curly": false
+          }
+        }
+      ],
+      "always": null
+    }
+  ],
+  "errors": []
+}

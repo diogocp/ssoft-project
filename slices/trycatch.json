@@ -1,0 +1,67 @@
+{
+  "kind": "program",
+  "children": [
+    {
+      "kind": "try",
+      "body": {
+        "kind": "block",
+        "children": [
+          {
+            "kind": "throw",
+            "what": {
+              "kind": "new",
+              "what": {
+                "kind": "identifier",
+                "resolution": "uqn",
+                "name": "Exception"
+              },
+              "arguments": [
+                {
+                  "kind": "string",
+                  "value": "humpty dumpty",
+                  "isDoubleQuote": false
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "catches": [
+        {
+          "kind": "catch",
+          "body": {
+            "kind": "block",
+            "children": [
+              {
+                "kind": "echo",
+                "arguments": [
+                  {
+                    "kind": "variable",
+                    "name": "e",
+                    "byref": false,
+                    "curly": false
+                  }
+                ]
+              }
+            ]
+          },
+          "what": [
+            {
+              "kind": "identifier",
+              "resolution": "uqn",
+              "name": "Exception"
+            }
+          ],
+          "variable": {
+            "kind": "variable",
+            "name": "e",
+            "byref": false,
+            "curly": false
+          }
+        }
+      ],
+      "always": null
+    }
+  ],
+  "errors": []
+}

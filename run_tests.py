@@ -33,6 +33,8 @@ def main():
         Slice("while_backward_untaint", "SQL injection"),
         Slice("while_untainted_guard", None),
         Slice("untainted_offset", None),
+        Slice("trycatch", None),
+        Slice("tainted_try", "Cross site scripting"),
         Slice("dowhile", "SQL injection"),
         Slice("for", "SQL injection"),
         Slice("sql_escaped", "SQL injection", "mysql_escape_string"),

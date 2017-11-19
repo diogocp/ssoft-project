@@ -73,12 +73,14 @@ class SecurityEnvironment:
         self.definitions = {k: v for k, v in self.definitions.items()
                             if not k.startswith(name + "[")}
         self.definitions[name] = SecurityLevel(Tainted)
+        return self.definitions[name]
 
     def untaint(self, name, offset=None, endorsers=None):
         if offset is not None:
             name = "%s[%s]" % (name, offset)
 
         self.definitions[name] = SecurityLevel(Untainted, endorsers)
+        return self.definitions[name]
 
 
 class SecurityException(Exception):
@@ -154,6 +156,9 @@ def parse(s, env):
         'string': parse_literal,
         'number': parse_literal,
         'boolean': parse_literal,
+        'try': parse_try,
+        'throw': parse_throw,
+        'new': parse_call,  # XXX: it works like a call, but is it one?
         'constref': parse_literal,  # TODO: we many need to taint constants too
     }
 
@@ -261,41 +266,49 @@ def parse_assign(s, env):
     if s['operator'] == "=":
         right = parse(s['right'], env)
         if right.tainted or env.default_level:
-            env.taint(name, offset)
+            return env.taint(name, offset)
         else:
-            env.untaint(name, offset, right.endorsers)
+            return env.untaint(name, offset, right.endorsers)
     else:
         # The other assignment operators (+=, -=, *=, etc.)
         # combine the taintedness of the left and right sides
         left = parse(s['left'], env)
         right = parse(s['right'], env)
         if left.tainted or right.tainted or env.default_level:
-            env.taint(name, offset)
+            return env.taint(name, offset)
         else:
-            env.untaint(name, offset, left.endorsers + right.endorsers)
+            return env.untaint(name, offset, left.endorsers | right.endorsers)
 
 
 def parse_call(s, env):
     what = s['what']
-    if what['kind'] != "identifier":
+    name = None
+    if what['kind'] == "identifier":
+        name = what['name']
+    elif what['kind'] == "propertylookup":
+        # TODO: what do we do here? Since these are not global names, some
+        # kind of type checking is needed to know if the call is sensitive or
+        # not
+        raise NotImplementedError
+    else:
         raise NotImplementedError
 
-    if what['name'] in env.endorsers:
+    if name in env.endorsers:
         # Endorsers always return untainted.
         # We assume they don't have side effects.
-        return SecurityLevel(Untainted, {what['name']})
+        return SecurityLevel(Untainted, {name})
 
     # Check if any argument is tainted
     arguments = sum(parse(arg, env) for arg in s['arguments'])
 
-    if what['name'] not in env.sinks:
+    if name not in env.sinks:
         # Not a sensitive sink; continue assuming that the
         # return value is tainted if any argument is tainted.
         return arguments
 
     if arguments.tainted:
         # Tainted argument passed to sensitive sink!
-        raise SecurityException(what['name'])
+        raise SecurityException(name)
     else:
         # Untainted argument passed to sensitive sink.
         # Mark endorsers as active.
@@ -332,6 +345,20 @@ def parse_encapsed(s, env):
 
 def parse_literal(s, env):
     return SecurityLevel(Untainted)
+
+
+def parse_try(s, env):
+    env_try = copy.deepcopy(env)
+    parse(s['body'], env_try)
+    for catch in s['catches']:
+        env_catch = copy.deepcopy(env_try)
+        test = parse(catch['body'], env_catch)
+        env_try.merge_definitions(env_catch)
+    env.merge_definitions(env_try)
+
+
+def parse_throw(s, env):
+    parse(s['what'], env)
 
 
 def offset_to_string(s):
